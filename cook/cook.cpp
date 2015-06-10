@@ -360,7 +360,7 @@ void CookScene::initScene( InitialCameraData& camera_data )
                                    /*make_float3( parameters[setup].lookat[0],     // target
                                                 parameters[setup].lookat[1],
                                                 parameters[setup].lookat[2] */
-												make_float3(5.0f, 0.0f, 0),
+												make_float3(5.0f, -1.0f, 0),
                                    make_float3( 0.0f, 1.0f,  0.0f ),             // up
                                    40.0f );                                      // vfov
 

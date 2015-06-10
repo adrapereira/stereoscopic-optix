@@ -70,7 +70,6 @@ float3         GLUTDisplay::m_text_color           = make_float3( 0.95f );
 float3         GLUTDisplay::m_text_shadow_color    = make_float3( 0.10f );
 
 bool           GLUTDisplay::m_print_mem_usage      = false;
-bool           GLUTDisplay::m_anaglyphic		   = false;
 
 GLUTDisplay::contDraw_E GLUTDisplay::m_app_continuous_mode = CDNone;
 GLUTDisplay::contDraw_E GLUTDisplay::m_cur_continuous_mode = CDNone;
@@ -681,11 +680,6 @@ void GLUTDisplay::keyPressed(unsigned char key, int x, int y)
     case ']':
       m_scene->incrementCPUThreads(1);
       break;
-
-	case 'a':
-		m_anaglyphic = !m_anaglyphic;
-		break;
-
   default:
     return;
   }

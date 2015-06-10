@@ -120,7 +120,6 @@ private:
   static optix::float3  m_text_shadow_color;
 
   static bool           m_print_mem_usage;
-  static bool			m_anaglyphic;
 
   static contDraw_E     m_app_continuous_mode;
   static contDraw_E     m_cur_continuous_mode;

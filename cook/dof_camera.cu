@@ -115,8 +115,8 @@ static __device__ __inline__ float3 trace_one(float3 pos, float3 look)
 RT_PROGRAM void dof_camera(){
 	float3 new_color;
 	if (anaglyphic){
-		float3 olhoEsq = trace_one(posA, lookA);
-		float3 olhoDir = trace_one(posB, lookB);
+		float3 olhoEsq = trace_one(posB, lookB);
+		float3 olhoDir = trace_one(posA, lookA);
 
 		float3 cyan, red;
 		cyan.x = 0; cyan.y = 1; cyan.z = 1;

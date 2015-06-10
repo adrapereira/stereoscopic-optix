@@ -28,7 +28,7 @@ struct PerRayData_radiance
 {
   float3 result;
   float  importance;
-  int    depth;
+  int    depth; 
 };
 
 rtDeclareVariable(float3,        eye, , );
@@ -37,8 +37,8 @@ rtDeclareVariable(float3,        V, , );
 rtDeclareVariable(float3,        W, , );
 
 rtDeclareVariable(float3, posA, , );
-rtDeclareVariable(float3, posB, , );
 rtDeclareVariable(float3, lookA, , );
+rtDeclareVariable(float3, posB, , );
 rtDeclareVariable(float3, lookB, , );
 rtDeclareVariable(int, anaglyphic, , );
 
@@ -54,67 +54,41 @@ rtDeclareVariable(float, time_view_scale, , ) = 1e-6f;
 
 //#define TIME_VIEW
 
-static __device__ __inline__ uchar4 anaglyphic_trace(const uint2& index)
+static __device__ __inline__ float3 trace(float3 pos, float3 look)
 {
-	float2 d = make_float2(index) / make_float2(launch_dim) * 2.f - 1.f;
-	float3 res[2];
-	for (int i = 0; i < 2; i++){
-		float3 usarLook, usarPos;
-		if (i == 0){
-			usarPos = posA;
-			usarLook = lookA;
-		}
-		else{
-			usarPos = posB;
-			usarLook = lookB;
-		}
-		float3 ray_origin = usarPos;
-		float3 ray_direction = normalize(d.x*U + d.y*V + usarLook);
+	float2 d = make_float2(launch_index) / make_float2(launch_dim) * 2.f - 1.f;
+	float3 ray_origin = pos;
+	float3 ray_direction = normalize(d.x*U + d.y*V + look);
 
-		optix::Ray ray = optix::make_Ray(ray_origin, ray_direction, radiance_ray_type, scene_epsilon, RT_DEFAULT_MAX);
+	optix::Ray ray = optix::make_Ray(ray_origin, ray_direction, radiance_ray_type, scene_epsilon, RT_DEFAULT_MAX);
 
-		PerRayData_radiance prd;
-		prd.importance = 1.f;
-		prd.depth = 0;
+	PerRayData_radiance prd;
+	prd.importance = 1.f;
+	prd.depth = 0;
 
-		rtTrace(top_object, ray, prd);
-		res[i] = prd.result;
-	}
-
-	float3 cyan, red;
-	cyan.x = 0; cyan.y = 1; cyan.z = 1;
-	red.x = 1; red.y = 0; red.z = 0;
-	res[0] = res[0] * red;
-	res[1] = res[1] * cyan;
-
-	uchar4 eye1 = make_color(res[0]);
-	uchar4 eye2 = make_color(res[1]);
-
-	uchar4 new_color;
-	new_color.x = (eye1.x + eye2.x) / 2;
-	new_color.y = (eye1.y + eye2.y) / 2;
-	new_color.z = (eye1.z + eye2.z) / 2;
-	new_color.w = 255;
-
-	return new_color;
+	rtTrace(top_object, ray, prd);
+	return prd.result;
 }
 
-RT_PROGRAM void pinhole_camera()
-{
-	if (anaglyphic) output_buffer[launch_index] = anaglyphic_trace(launch_index);
-	else{
-		float2 d = make_float2(launch_index) / make_float2(launch_dim) * 2.f - 1.f;
-		float3 ray_origin = eye;
-		float3 ray_direction = normalize(d.x*U + d.y*V + W);
+RT_PROGRAM void pinhole_camera(){
+	if (anaglyphic){
+		float3 olhoEsq = trace(posB, lookB);
+		float3 olhoDir = trace(posA, lookA);
 
-		optix::Ray ray = optix::make_Ray(ray_origin, ray_direction, radiance_ray_type, scene_epsilon, RT_DEFAULT_MAX);
+		float3 cyan, red;
+		cyan.x = 0; cyan.y = 1; cyan.z = 1;
+		red.x = 1; red.y = 0; red.z = 0;
+		olhoEsq = olhoEsq * red;
+		olhoDir = olhoDir * cyan;
 
-		PerRayData_radiance prd;
-		prd.importance = 1.f;
-		prd.depth = 0;
-
-		rtTrace(top_object, ray, prd);
-		output_buffer[launch_index] = make_color(prd.result);
+		float3 new_color;
+		new_color.x = (olhoEsq.x + olhoDir.x) / 2;
+		new_color.y = (olhoEsq.y + olhoDir.y) / 2;
+		new_color.z = (olhoEsq.z + olhoDir.z) / 2;
+		output_buffer[launch_index] = make_color(new_color);
+	}else{
+		float3 res = trace(eye, W);
+		output_buffer[launch_index] = make_color(res);
 	}
 }
 

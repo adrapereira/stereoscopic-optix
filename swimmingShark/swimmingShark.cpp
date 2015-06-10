@@ -260,8 +260,8 @@ void TankScene::createGeometry( )
   SceneGG->setChild( 1, WaterSurfaceGI );
 
   // Make bubbles
-  //Bubbles = new Bubbles_t( make_float3( SCENE_BOX.m_max.x*0.3f, SCENE_BOX.m_min.y, SCENE_BOX.m_max.z*0.5f ), TankMat, ConstTS, m_context );
-  Bubbles = new Bubbles_t(make_float3(0, 0, 50.0f), TankMat, ConstTS, m_context);
+  Bubbles = new Bubbles_t( make_float3( SCENE_BOX.m_max.x*0.3f, SCENE_BOX.m_min.y, SCENE_BOX.m_max.z*0.5f ), TankMat, ConstTS, m_context );
+  //Bubbles = new Bubbles_t(make_float3(0, 0, 50.0f), TankMat, ConstTS, m_context);
 
   unsigned int numFish = static_cast<unsigned int>(Fish.size());
 
@@ -450,76 +450,36 @@ void TankScene::updateGeometry( )
 }
 
 
-/*
-Normalise a vector
-*/
-void Normalise(float3 *p){
-	double length;
-
-	length = sqrt(p->x * p->x + p->y * p->y + p->z * p->z);
-	if (length != 0) {
-		p->x /= length;
-		p->y /= length;
-		p->z /= length;
-	}
-	else {
-		p->x = 0;
-		p->y = 0;
-		p->z = 0;
-	}
-}
-
-/*
-Calculate the unit normal at p given two other points
-p1,p2 on the surface. The normal points in the direction
-of p1 crossproduct p2
-*/
-float3 CalcNormal(float3 p, float3 p1, float3 p2)
-{
-	float3 n, pa, pb;
-
-	pa.x = p1.x - p.x;
-	pa.y = p1.y - p.y;
-	pa.z = p1.z - p.z;
-	pb.x = p2.x - p.x;
-	pb.y = p2.y - p.y;
-	pb.z = p2.z - p.z;
-	Normalise(&pa);
-	Normalise(&pb);
-
-	n.x = pa.y * pb.z - pa.z * pb.y;
-	n.y = pa.z * pb.x - pa.x * pb.z;
-	n.z = pa.x * pb.y - pa.y * pb.x;
-	Normalise(&n);
-
-	return(n);
-}
-
 void TankScene::trace(const RayGenCameraData& camera_data){
+	float3 posA, lookA, posB, lookB;
 	float3 pos = camera_data.eye;
 	float3 look = camera_data.W;
-
-	float alfa = atan2(look.z - pos.z, look.x - pos.x);
-
-	float3 posA, posB;
+	float S = length(camera_data.W) / 200;
+	float alfa = atan2(look.y - pos.y, look.x - pos.x);
 
 	posA.x = pos.x - sin(alfa) * S;
-	posA.y = pos.y;
-	posA.z = pos.z + cos(alfa) * S;
+	posA.z = pos.z;
+	posA.y = pos.y + cos(alfa) * S;
+	lookA.x = look.x - sin(alfa) * S;
+	lookA.z = look.z;
+	lookA.y = look.y + cos(alfa) * S;
 
 	posB.x = pos.x + sin(alfa) * S;
-	posB.y = pos.y;
-	posB.z = pos.z - cos(alfa) * S;
+	posB.z = pos.z;
+	posB.y = pos.y - cos(alfa) * S;
+	lookB.x = look.x + sin(alfa) * S;
+	lookB.z = look.z;
+	lookB.y = look.y - cos(alfa) * S;
+
+	m_context["posA"]->setFloat(posA);
+	m_context["posB"]->setFloat(posB);
+	m_context["lookA"]->setFloat(lookA);
+	m_context["lookB"]->setFloat(lookB);
 
 	m_context["eye"]->setFloat(camera_data.eye);
 	m_context["U"]->setFloat(camera_data.U);
 	m_context["V"]->setFloat(camera_data.V);
 	m_context["W"]->setFloat(camera_data.W);
-
-	m_context["posA"]->setFloat(posA);
-	m_context["posB"]->setFloat(posB);
-	m_context["lookA"]->setFloat(look);
-	m_context["lookB"]->setFloat(look);
 	m_context["anaglyphic"]->setInt(m_anaglyphic);
 
 	Buffer buffer = m_context["output_buffer"]->getBuffer();
