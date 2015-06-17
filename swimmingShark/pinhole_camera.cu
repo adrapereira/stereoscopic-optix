@@ -71,7 +71,7 @@ static __device__ __inline__ float3 trace(float3 pos, float3 look)
 }
 
 RT_PROGRAM void pinhole_camera(){
-	if (anaglyphic){
+	/*if (anaglyphic){
 		float3 olhoEsq = trace(posB, lookB);
 		float3 olhoDir = trace(posA, lookA);
 
@@ -82,14 +82,18 @@ RT_PROGRAM void pinhole_camera(){
 		olhoDir = olhoDir * cyan;
 
 		float3 new_color;
-		new_color.x = (olhoEsq.x + olhoDir.x) / 2;
-		new_color.y = (olhoEsq.y + olhoDir.y) / 2;
-		new_color.z = (olhoEsq.z + olhoDir.z) / 2;
+		new_color.x = (olhoEsq.x + olhoDir.x);
+		new_color.y = (olhoEsq.y + olhoDir.y);
+		new_color.z = (olhoEsq.z + olhoDir.z);
 		output_buffer[launch_index] = make_color(new_color);
 	}else{
 		float3 res = trace(eye, W);
 		output_buffer[launch_index] = make_color(res);
+	}*/
+	if (analgyphic){
+		output_buffer[launch_index] = make_color({1.0f,1.0f,1.0f});
 	}
+	else output_buffer[launch_index] = make_color({ 0.0f, 1.0f, 0.0f });
 }
 
 RT_PROGRAM void exception()

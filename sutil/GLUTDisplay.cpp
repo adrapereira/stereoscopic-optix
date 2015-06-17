@@ -90,6 +90,10 @@ int            GLUTDisplay::m_old_window_y         = -1;
 int            GLUTDisplay::m_old_window_x_offset  = -1;
 int            GLUTDisplay::m_old_window_y_offset  = -1;
 
+//3D
+int            GLUTDisplay::m_stereo = 0;
+int            GLUTDisplay::m_stereo_left = 0;
+
 unsigned int   GLUTDisplay::m_texId                = 0;
 bool           GLUTDisplay::m_sRGB_supported       = false;
 bool           GLUTDisplay::m_use_sRGB             = false;
@@ -273,7 +277,7 @@ void GLUTDisplay::init( int& argc, char** argv )
   if (!m_benchmark_no_display)
   {
     glutInit(&argc, argv);
-    glutInitDisplayMode(GLUT_RGB | GLUT_DOUBLE);
+    glutInitDisplayMode(GLUT_RGB | GLUT_DOUBLE | GLUT_STEREO);
   }
 }
 
@@ -300,7 +304,7 @@ void GLUTDisplay::run( const std::string& title, SampleScene* scene, contDraw_E 
   }
 
   // Initialize GLUT and GLEW first. Now initScene can use OpenGL and GLEW.
-  glutInitDisplayMode(GLUT_RGB | GLUT_DOUBLE);
+  glutInitDisplayMode(GLUT_RGB | GLUT_DOUBLE | GLUT_STEREO);
   if( m_initial_window_width > 0 && m_initial_window_height > 0)
     glutInitWindowSize( m_initial_window_width, m_initial_window_height );
   else
@@ -680,6 +684,8 @@ void GLUTDisplay::keyPressed(unsigned char key, int x, int y)
     case ']':
       m_scene->incrementCPUThreads(1);
       break;
+	case '3':
+		m_stereo = !m_stereo;
   default:
     return;
   }
@@ -744,6 +750,36 @@ void GLUTDisplay::idle()
 
 void GLUTDisplay::displayFrame()
 {
+	//3D
+	GLboolean g_valid3D;
+	glGetBooleanv(GL_STEREO, &g_valid3D);
+	if (g_valid3D){
+		glEnable(GL_STEREO);
+	}
+	else
+		glDisable(GL_STEREO);
+
+	if (m_stereo && g_valid3D){
+		glEnable(GL_TEXTURE_2D);
+		if (m_stereo_left){
+			glDrawBuffer(GL_BACK);  // <<<< enable both back buffers for clearing
+			glClear(GL_COLOR_BUFFER_BIT);
+			glDrawBuffer(GL_BACK_RIGHT);
+			printf("Left\n");
+		}
+		else{
+			glDrawBuffer(GL_BACK_LEFT);
+			printf("Right\n");
+		}
+	}
+	else{
+		glEnable(GL_TEXTURE_2D);
+		glDrawBuffer(GL_BACK);
+		glClear(GL_COLOR_BUFFER_BIT);
+	}
+	//3D
+
+
   GLboolean sRGB = GL_FALSE;
   if (m_use_sRGB && m_sRGB_supported) {
     glGetBooleanv( GL_FRAMEBUFFER_SRGB_CAPABLE_EXT, &sRGB );
@@ -773,6 +809,7 @@ void GLUTDisplay::displayFrame()
 
   if (vboId)
   {
+
     if (!m_texId)
     {
       glGenTextures( 1, &m_texId );
@@ -793,36 +830,38 @@ void GLUTDisplay::displayFrame()
 
     // send pbo to texture
     glBindBuffer(GL_PIXEL_UNPACK_BUFFER, vboId);
-
+	
     RTsize elementSize = buffer->getElementSize();
     if      ((elementSize % 8) == 0) glPixelStorei(GL_UNPACK_ALIGNMENT, 8);
     else if ((elementSize % 4) == 0) glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
     else if ((elementSize % 2) == 0) glPixelStorei(GL_UNPACK_ALIGNMENT, 2);
     else                             glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 
-    {
-      nvtx::ScopedRange r( "glTexImage" );
-      if(buffer_format == RT_FORMAT_UNSIGNED_BYTE4) {
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, buffer_width, buffer_height, 0, GL_BGRA, GL_UNSIGNED_BYTE, 0);
-      } else if(buffer_format == RT_FORMAT_FLOAT4) {
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F_ARB, buffer_width, buffer_height, 0, GL_RGBA, GL_FLOAT, 0);
-      } else if(buffer_format == RT_FORMAT_FLOAT3) {
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB32F_ARB, buffer_width, buffer_height, 0, GL_RGB, GL_FLOAT, 0);
-      } else if(buffer_format == RT_FORMAT_FLOAT) {
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE32F_ARB, buffer_width, buffer_height, 0, GL_LUMINANCE, GL_FLOAT, 0);
-      } else {
-        assert(0 && "Unknown buffer format");
-      }
-    }
-    glBindBuffer( GL_PIXEL_UNPACK_BUFFER, 0 );
-
-    glEnable(GL_TEXTURE_2D);
+	{
+		nvtx::ScopedRange r("glTexImage");
+		if (buffer_format == RT_FORMAT_UNSIGNED_BYTE4) {
+			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, buffer_width, buffer_height, 0, GL_BGRA, GL_UNSIGNED_BYTE, 0);
+		}
+		else if (buffer_format == RT_FORMAT_FLOAT4) {
+			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F_ARB, buffer_width, buffer_height, 0, GL_RGBA, GL_FLOAT, 0);
+		}
+		else if (buffer_format == RT_FORMAT_FLOAT3) {
+			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB32F_ARB, buffer_width, buffer_height, 0, GL_RGB, GL_FLOAT, 0);
+		}
+		else if (buffer_format == RT_FORMAT_FLOAT) {
+			glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE32F_ARB, buffer_width, buffer_height, 0, GL_LUMINANCE, GL_FLOAT, 0);
+		}
+		else {
+			assert(0 && "Unknown buffer format");
+		}
+	}
+	glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
 
     // Initialize offsets to pixel center sampling.
 
     float u = 0.5f/buffer_width;
     float v = 0.5f/buffer_height;
-
+	
     glBegin(GL_QUADS);
     glTexCoord2f(u, v);
     glVertex2f(0.0f, 0.0f);
@@ -833,7 +872,7 @@ void GLUTDisplay::displayFrame()
     glTexCoord2f(u, 1.0f - v);
     glVertex2f(0.0f, 1.0f);
     glEnd();
-
+	
     glDisable(GL_TEXTURE_2D);
   } else {
     GLvoid* imageData = buffer->map();
@@ -868,7 +907,7 @@ void GLUTDisplay::displayFrame()
             exit(2);
             break;
     }
-
+	
     RTsize elementSize = buffer->getElementSize();
     int align = 1;
     if      ((elementSize % 8) == 0) align = 8; 
@@ -882,7 +921,9 @@ void GLUTDisplay::displayFrame()
     NVTX_RangePop();
 
     buffer->unmap();
+	buffer->destroy();
   }
+
   if (m_use_sRGB && m_sRGB_supported && sRGB) {
     glDisable(GL_FRAMEBUFFER_SRGB_EXT);
   }
@@ -907,30 +948,34 @@ void GLUTDisplay::display()
     float3 eye, U, V, W;
     m_camera->getEyeUVW( eye, U, V, W );
 	float3 up = m_camera->up;
-    // Don't be tempted to just start filling in the values outside of a constructor, 
-    // because if you add a parameter it's easy to forget to add it here.
-		SampleScene::RayGenCameraData camera_data( eye, U, V, W, up );
+	SampleScene::RayGenCameraData camera_data( eye, U, V, W, up );
+
+	if (m_stereo){
+			nvtx::ScopedRange r("trace");
+			m_scene->trace(camera_data, display_requested, LEFT);
+			m_stereo_left = 1;
+			displayFrame();
+
+			m_scene->trace(camera_data, display_requested, RIGHT);
+			m_stereo_left = 0;
+			displayFrame();
+	}
+	else{
 		{
-		  nvtx::ScopedRange r( "trace" );
-		  m_scene->trace( camera_data, display_requested );
+			nvtx::ScopedRange r("trace");
+			m_scene->trace(camera_data, display_requested);
 		}
-
-		// Always count rendered frames
-		++m_frame_count;
-
-		if( display_requested && m_display_frames ) {
-		  // Only enable for debugging
-		  // glClearColor(1.0, 0.0, 0.0, 0.0);
-		  // glClear(GL_COLOR_BUFFER_BIT);
-
-		  nvtx::ScopedRange r( "displayFrame" );
-		  displayFrame();
+		if (display_requested && m_display_frames) {
+			nvtx::ScopedRange r("displayFrame");
+			displayFrame();
 		}
-	  } catch( Exception& e ){
-		sutilReportError( e.getErrorString().c_str() );
-		exit(2);
+	}
+	} catch( Exception& e ){
+	sutilReportError( e.getErrorString().c_str() );
+	exit(2);
   }
-
+	// Always count rendered frames
+	++m_frame_count;
 
   // Do not draw text on 1st frame -- issue on linux causes problems with 
   // glDrawPixels call if drawText glutBitmapCharacter is called on first frame.
@@ -1009,7 +1054,7 @@ void GLUTDisplay::display()
     }
   }
 
-  if ( display_requested && m_display_frames ) {
+  if ( display_requested && m_display_frames) {
     nvtx::ScopedRange r( "glutSwapBuffers" );
     // Swap buffers
     glutSwapBuffers();

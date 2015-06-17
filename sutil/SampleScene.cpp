@@ -39,7 +39,6 @@
 #include <cstdlib>
 #include <algorithm>
 
-
 using namespace optix;
 
 //-----------------------------------------------------------------------------
@@ -113,6 +112,12 @@ void SampleScene::cleanUp()
 {
   m_context->destroy();
   m_context = 0;
+}
+
+void
+SampleScene::trace(const RayGenCameraData& camera_data, bool& display, int mode)
+{
+	trace(camera_data);
 }
 
 void

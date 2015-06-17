@@ -297,6 +297,7 @@ public:
   virtual void   initScene( InitialCameraData& camera_data );
   virtual void   trace( const RayGenCameraData& camera_data);
   virtual void   trace( const RayGenCameraData& camera_data, bool& disp );
+  virtual void   trace(const RayGenCameraData& camera_data, bool& disp, int eye);
   virtual bool   keyPressed(unsigned char key, int x, int y);
   virtual Buffer getOutputBuffer();
 
@@ -308,6 +309,7 @@ private:
   void setup1984();
 
   int m_anaglyphic = 0;
+  int m_eye = 0;
   float S = 0;
 
   static Parameters     parameters[];
@@ -360,7 +362,7 @@ void CookScene::initScene( InitialCameraData& camera_data )
                                    /*make_float3( parameters[setup].lookat[0],     // target
                                                 parameters[setup].lookat[1],
                                                 parameters[setup].lookat[2] */
-												make_float3(5.0f, -1.0f, 0),
+												make_float3( 3.0f, -30.0f, 1.0f ),
                                    make_float3( 0.0f, 1.0f,  0.0f ),             // up
                                    40.0f );                                      // vfov
 
@@ -538,39 +540,82 @@ void CookScene::trace( const RayGenCameraData& camera_data )
   trace(camera_data, disp);
 }
 
-void CookScene::trace( const RayGenCameraData& camera_data, bool& disp ){
-	if (m_anaglyphic){
-		float3 posA, lookA, posB, lookB;
-		float3 pos = camera_data.eye;
-		float3 look = camera_data.W;
-		S = length(camera_data.W) / 350;
-		float alfa = atan2(look.y - pos.y, look.x - pos.x);
-		
+void CookScene::trace(const RayGenCameraData& camera_data, bool& disp, int eye){
+	m_eye = eye;
+	//m_anaglyphic = 0; //do not render as anaglyphic when in shutter mode
+	trace(camera_data, disp);
+}
+
+
+float3 * SampleScene::stereoCalc(const RayGenCameraData& camera_data, int mode){
+	float3 posA, lookA, posB, lookB;
+	float3 pos = camera_data.eye;
+	float3 look = camera_data.W;
+	//float S = length(camera_data.W) / 200;
+	float S = 0.05;
+
+	float alfa = atan2(look.y - pos.y, look.x - pos.x);
+	float3 *res;
+	if (mode == BOTH)
+		res = (float3 *)malloc(sizeof(float3)* 4);
+	else res = (float3 *)malloc(sizeof(float3)* 2);
+
+	if (mode == LEFT || mode == BOTH){
 		posA.x = pos.x - sin(alfa) * S;
 		posA.z = pos.z;
 		posA.y = pos.y + cos(alfa) * S;
 		lookA.x = look.x - sin(alfa) * S;
 		lookA.z = look.z;
 		lookA.y = look.y + cos(alfa) * S;
-
+		res[0] = posA; res[1] = lookA;
+	}
+	if (mode == RIGHT || mode == BOTH){
 		posB.x = pos.x + sin(alfa) * S;
 		posB.z = pos.z;
 		posB.y = pos.y - cos(alfa) * S;
 		lookB.x = look.x + sin(alfa) * S;
 		lookB.z = look.z;
 		lookB.y = look.y - cos(alfa) * S;
+		if (mode == BOTH){
+			res[2] = posB; res[3] = lookB;
+		}
+		else{
+			res[0] = posB; res[1] = lookB;
+		}
+	}
+	return res;
+}
 
-		m_context["posA"]->setFloat(posA);
-		m_context["posB"]->setFloat(posB);
-		m_context["lookA"]->setFloat(lookA);
-		m_context["lookB"]->setFloat(lookB);
+
+void CookScene::trace( const RayGenCameraData& camera_data, bool& disp ){
+	m_context["eye"]->setFloat(camera_data.eye);
+	m_context["U"]->setFloat(camera_data.U);
+	m_context["V"]->setFloat(camera_data.V);
+	m_context["W"]->setFloat(camera_data.W);
+	m_context["anaglyphic"]->setInt(m_anaglyphic);
+
+	if (m_anaglyphic){
+		float3 *vecs = stereoCalc(camera_data, BOTH);
+
+		m_context["posA"]->setFloat(vecs[0]);
+		m_context["lookA"]->setFloat(vecs[1]);
+		m_context["posB"]->setFloat(vecs[2]);
+		m_context["lookB"]->setFloat(vecs[3]);
 	}
 
-	m_context["eye"]->setFloat( camera_data.eye );
-	m_context["U"]->setFloat( camera_data.U );
-	m_context["V"]->setFloat( camera_data.V );
-	m_context["W"]->setFloat( camera_data.W );
-	m_context["anaglyphic"]->setInt(m_anaglyphic);
+	if (m_eye == LEFT){
+		float3 *vecs = stereoCalc(camera_data, LEFT);
+
+		m_context["eye"]->setFloat(vecs[0]);
+		m_context["W"]->setFloat(vecs[1]);
+	}
+
+	if (m_eye == RIGHT){
+		float3 *vecs = stereoCalc(camera_data, RIGHT);
+
+		m_context["eye"]->setFloat(vecs[0]);
+		m_context["W"]->setFloat(vecs[1]);
+	}
 
 	float focal_distance = length(camera_data.W) + parameters[setup].distance_offset;
 	focal_distance = fmaxf(focal_distance, m_context["scene_epsilon"]->getFloat());
@@ -590,7 +635,7 @@ void CookScene::trace( const RayGenCameraData& camera_data, bool& disp ){
 		sequence = 1;
 		m_camera_changed = false;
 	}
-
+	
 	if (setup == SETUP_1984) {
 		// Jitter the location of the pool ball for motion blur
 		float3 offset = random1() * make_float3(0.1f, 0.6f, 0.0f);
@@ -599,14 +644,14 @@ void CookScene::trace( const RayGenCameraData& camera_data, bool& disp ){
 														poolball[4].center.z + offset.z,
 														poolball[4].radius );
 	}
-
+	
 	m_context["frame_number"]->setUint( ++frame );
 	disp = (frame >= 33) || !((frame-1) & 0x3); // Display frames 1, 5, 9, ... and 33+
 
-	float4 jitter = compute_jitter( sequence );
+	/*float4 jitter = compute_jitter( sequence );
 	//float4 jitter = random4();
 	m_context["jitter"]->setFloat( jitter );
-
+	*/
 	m_context->launch( 0,
 					static_cast<unsigned int>(buffer_width),
 					static_cast<unsigned int>(buffer_height)
@@ -670,9 +715,9 @@ void CookScene::createGeometry()
   parallelogram->setBoundingBoxProgram( m_context->createProgramFromPTXFile( ptx_path, "bounds" ) );
   parallelogram->setIntersectionProgram( m_context->createProgramFromPTXFile( ptx_path, "intersect" ) );
 
-  float3 anchor = make_float3( -4.00f, -4.0f, 0.01f );
-  float3 v1 = make_float3( 18.0f,  0.0f, 0.01f );
-  float3 v2 = make_float3(  0.0f, 18.0f, 0.01f );
+  float3 anchor = make_float3( -5.00f, -25.0f, 0.01f );
+  float3 v1 = make_float3( 20.0f,  0.0f, 0.01f );
+  float3 v2 = make_float3(  0.0f, 50.0f, 0.01f );
 
   float3 normal = cross( v1, v2 );
   normal = normalize( normal );
@@ -781,6 +826,10 @@ void CookScene::setupTriangle()
   poolball.push_back( PoolBall(m_context, texpath("pool_15.ppm"), center[12], radius, rotation[12], color) );
   poolball.push_back( PoolBall(m_context, texpath("pool_10.ppm"), center[13], radius, rotation[13], color) );
   poolball.push_back( PoolBall(m_context, texpath("pool_7.ppm"),  center[14], radius, rotation[14], color) );
+
+  //Nova
+  poolball.push_back(PoolBall(m_context, "", {3.0f, -20.0f, 1.0f}, radius, rotation[14], color));
+
   std::cerr << "finished." << std::endl;
 }
 

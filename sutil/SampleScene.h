@@ -99,6 +99,8 @@ public:
 
   // Update camera shader with new viewing params and then trace
   SUTILAPI virtual void   trace( const RayGenCameraData& camera_data, bool& display );
+
+  SUTILAPI virtual void	  trace(const RayGenCameraData& camera_data, bool& display, int mode);
  
   // Return the output buffer to be displayed
   SUTILAPI virtual optix::Buffer getOutputBuffer()=0;
@@ -124,6 +126,13 @@ public:
 
   // Accessor
   SUTILAPI optix::Context& getContext() { return m_context; }
+
+  float3 * stereoCalc(const RayGenCameraData& camera_data, int mode);
+
+
+	#define LEFT 0
+	#define RIGHT 1
+	#define BOTH 2
 
 protected:
   SUTILAPI optix::Buffer createOutputBuffer(RTformat format, unsigned int width, unsigned int height);

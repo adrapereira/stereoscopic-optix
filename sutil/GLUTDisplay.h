@@ -139,6 +139,11 @@ private:
   static int            m_old_window_x_offset;
   static int            m_old_window_y_offset;
 
+  static int            m_stereo;
+  static int            m_stereo_left;
+  #define EYE_LEFT 0
+  #define EYE_RIGHT 1
+
   static unsigned int   m_texId;
   static bool           m_sRGB_supported;
   static bool           m_use_sRGB;

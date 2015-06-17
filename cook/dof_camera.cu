@@ -124,14 +124,15 @@ RT_PROGRAM void dof_camera(){
 		olhoEsq = olhoEsq * red;
 		olhoDir = olhoDir * cyan;
 
-		new_color.x = (olhoEsq.x + olhoDir.x) / 1.5;
-		new_color.y = (olhoEsq.y + olhoDir.y) / 1.5;
-		new_color.z = (olhoEsq.z + olhoDir.z) / 1.5;
+		new_color.x = (olhoEsq.x + olhoDir.x);
+		new_color.y = (olhoEsq.y + olhoDir.y);
+		new_color.z = (olhoEsq.z + olhoDir.z);
 	}
 	else{
 		new_color = trace_one(eye, W);
 	}
-	// accumulation
+
+	/*// accumulation
 	if (frame_number > 1)
 	{
 		float a = 1.0f / (float)frame_number;
@@ -140,9 +141,9 @@ RT_PROGRAM void dof_camera(){
 		write_output(a * new_color + b * old_color);
 	}
 	else
-	{
+	{*/
 		write_output(new_color);
-	}
+	//}
 }
 
 //RT_PROGRAM void dof_camera()
