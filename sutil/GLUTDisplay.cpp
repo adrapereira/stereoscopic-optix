@@ -686,6 +686,7 @@ void GLUTDisplay::keyPressed(unsigned char key, int x, int y)
       break;
 	case '3':
 		m_stereo = !m_stereo;
+		m_scene->setStereo(m_stereo);
   default:
     return;
   }
@@ -764,12 +765,10 @@ void GLUTDisplay::displayFrame()
 		if (m_stereo_left){
 			glDrawBuffer(GL_BACK);  // <<<< enable both back buffers for clearing
 			glClear(GL_COLOR_BUFFER_BIT);
-			glDrawBuffer(GL_BACK_RIGHT);
-			printf("Left\n");
+			glDrawBuffer(GL_BACK_LEFT);
 		}
 		else{
-			glDrawBuffer(GL_BACK_LEFT);
-			printf("Right\n");
+			glDrawBuffer(GL_BACK_RIGHT);
 		}
 	}
 	else{
@@ -874,59 +873,7 @@ void GLUTDisplay::displayFrame()
     glEnd();
 	
     glDisable(GL_TEXTURE_2D);
-  } else {
-    GLvoid* imageData = buffer->map();
-    assert( imageData );
-
-    GLenum gl_data_type = GL_FALSE;
-    GLenum gl_format = GL_FALSE;
-
-    switch (buffer_format) {
-          case RT_FORMAT_UNSIGNED_BYTE4:
-            gl_data_type = GL_UNSIGNED_BYTE;
-            gl_format    = GL_BGRA;
-            break;
-
-          case RT_FORMAT_FLOAT:
-            gl_data_type = GL_FLOAT;
-            gl_format    = GL_LUMINANCE;
-            break;
-
-          case RT_FORMAT_FLOAT3:
-            gl_data_type = GL_FLOAT;
-            gl_format    = GL_RGB;
-            break;
-
-          case RT_FORMAT_FLOAT4:
-            gl_data_type = GL_FLOAT;
-            gl_format    = GL_RGBA;
-            break;
-
-          default:
-            fprintf(stderr, "Unrecognized buffer data type or format.\n");
-            exit(2);
-            break;
-    }
-	
-    RTsize elementSize = buffer->getElementSize();
-    int align = 1;
-    if      ((elementSize % 8) == 0) align = 8; 
-    else if ((elementSize % 4) == 0) align = 4;
-    else if ((elementSize % 2) == 0) align = 2;
-    glPixelStorei(GL_UNPACK_ALIGNMENT, align);
-
-    NVTX_RangePushA("glDrawPixels");
-    glDrawPixels( static_cast<GLsizei>( buffer_width ), static_cast<GLsizei>( buffer_height ),
-      gl_format, gl_data_type, imageData);
-    NVTX_RangePop();
-
-    buffer->unmap();
-	buffer->destroy();
-  }
-
-  if (m_use_sRGB && m_sRGB_supported && sRGB) {
-    glDisable(GL_FRAMEBUFFER_SRGB_EXT);
-  }
+  } 
 }
 
 void GLUTDisplay::display()
@@ -952,10 +899,12 @@ void GLUTDisplay::display()
 
 	if (m_stereo){
 			nvtx::ScopedRange r("trace");
+			//trace and display Left eye
 			m_scene->trace(camera_data, display_requested, LEFT);
 			m_stereo_left = 1;
 			displayFrame();
 
+			//trace and display Right eye
 			m_scene->trace(camera_data, display_requested, RIGHT);
 			m_stereo_left = 0;
 			displayFrame();

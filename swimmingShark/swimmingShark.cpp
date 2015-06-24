@@ -44,7 +44,7 @@
 
 using namespace optix;
 
-float S = 0;
+float S = 0.01;
 const float SPAN = 50.0f; // meter radius
 const optix::Aabb SCENE_BOX( optix::make_float3( -SPAN, 0, -SPAN ), optix::make_float3( SPAN, 12.0f, SPAN ) );
 optix::Aabb TargetBox( optix::make_float3( SCENE_BOX.m_min.x * 0.4f, SCENE_BOX.m_min.y, SCENE_BOX.m_max.z * 0.85f ),
@@ -166,6 +166,7 @@ private:
   Geometry createHeightField( );
   Geometry createParallelogram( Program pbounds, Program pisect, float3 anchor, float3 v1, float3 v2 );
   void createGroundData( );
+  void TankScene::trace(const RayGenCameraData& camera_data, bool& disp, int eye);
 
   Group         TopGroup;
   Buffer        GroundBuf;
@@ -181,7 +182,7 @@ private:
   int           m_num_species_to_load, m_fish_per_species;
   bool          m_animate;
   int           m_anaglyphic = 0;
-  float		    m_dist;
+  int			m_eye;
 
   const static int         WIDTH;
   const static int         HEIGHT;
@@ -356,6 +357,10 @@ void TankScene::initScene( InitialCameraData& camera_data )
   // Prepare to run
   m_context->validate( );
   m_context->compile( );
+
+  puts("Press space to render in anaglyphic 3D.");
+  puts("Press 3 to render in Nvidia's 3D Vision.");
+  puts("You can use + and - to increase or decrease eye separation.");
 }
 
 void TankScene::createGroundData( )
@@ -449,38 +454,85 @@ void TankScene::updateGeometry( )
   TopGroup->getAcceleration( )->markDirty( );
 }
 
+void TankScene::trace(const RayGenCameraData& camera_data, bool& disp, int eye){
+	m_eye = eye;
+	m_anaglyphic = 0; //do not render as anaglyphic when in shutter mode
+	trace(camera_data);
+}
 
-void TankScene::trace(const RayGenCameraData& camera_data){
+
+float3 * SampleScene::stereoCalc(const RayGenCameraData& camera_data, int mode){
 	float3 posA, lookA, posB, lookB;
 	float3 pos = camera_data.eye;
 	float3 look = camera_data.W;
-	float S = length(camera_data.W) / 200;
-	float alfa = atan2(look.y - pos.y, look.x - pos.x);
 
-	posA.x = pos.x - sin(alfa) * S;
-	posA.z = pos.z;
-	posA.y = pos.y + cos(alfa) * S;
-	lookA.x = look.x - sin(alfa) * S;
-	lookA.z = look.z;
-	lookA.y = look.y + cos(alfa) * S;
+	float alfa = atan2(look.z - pos.z, look.x - pos.x);
+	float3 *res;
+	if (mode == BOTH)
+		res = (float3 *)malloc(sizeof(float3)* 4);
+	else res = (float3 *)malloc(sizeof(float3)* 2);
 
-	posB.x = pos.x + sin(alfa) * S;
-	posB.z = pos.z;
-	posB.y = pos.y - cos(alfa) * S;
-	lookB.x = look.x + sin(alfa) * S;
-	lookB.z = look.z;
-	lookB.y = look.y - cos(alfa) * S;
+	if (mode == LEFT || mode == BOTH){
+		posA.x = pos.x - sin(alfa) * S;
+		posA.y = pos.y;
+		posA.z = pos.z + cos(alfa) * S;
+		lookA.x = look.x - sin(alfa) * S;
+		lookA.y = look.y;
+		lookA.z = look.z + cos(alfa) * S;
+		res[0] = posA; res[1] = lookA;
+	}
+	if (mode == RIGHT || mode == BOTH){
+		posB.x = pos.x + sin(alfa) * S;
+		posB.y = pos.y;
+		posB.z = pos.z - cos(alfa) * S;
+		lookB.x = look.x + sin(alfa) * S;
+		lookB.y = look.y;
+		lookB.z = look.z - cos(alfa) * S;
+		if (mode == BOTH){
+			res[2] = posB; res[3] = lookB;
+		}
+		else{
+			res[0] = posB; res[1] = lookB;
+		}
+	}
+	return res;
+}
 
-	m_context["posA"]->setFloat(posA);
-	m_context["posB"]->setFloat(posB);
-	m_context["lookA"]->setFloat(lookA);
-	m_context["lookB"]->setFloat(lookB);
 
+void TankScene::trace(const RayGenCameraData& camera_data){
+	//initialize vectors in the device
 	m_context["eye"]->setFloat(camera_data.eye);
 	m_context["U"]->setFloat(camera_data.U);
 	m_context["V"]->setFloat(camera_data.V);
 	m_context["W"]->setFloat(camera_data.W);
+	
+	m_context["posA"]->setFloat(camera_data.eye);
+	m_context["lookA"]->setFloat(camera_data.U);
+	m_context["posB"]->setFloat(camera_data.V);
+    m_context["lookB"]->setFloat(camera_data.W);
+
+	if (m_anaglyphic){
+		float3 *vecs = stereoCalc(camera_data, BOTH);
+
+		m_context["posA"]->setFloat(vecs[0]);
+	    m_context["lookA"]->setFloat(vecs[1]);
+		m_context["posB"]->setFloat(vecs[2]);
+		m_context["lookB"]->setFloat(vecs[3]);
+	}
 	m_context["anaglyphic"]->setInt(m_anaglyphic);
+	if (m_eye == LEFT){
+		float3 *vecs = stereoCalc(camera_data, LEFT);
+
+		m_context["eye"]->setFloat(vecs[0]);
+		m_context["W"]->setFloat(vecs[1]);
+	}
+
+	if (m_eye == RIGHT){
+		float3 *vecs = stereoCalc(camera_data, RIGHT);
+
+		m_context["eye"]->setFloat(vecs[0]);
+		m_context["W"]->setFloat(vecs[1]);
+	}
 
 	Buffer buffer = m_context["output_buffer"]->getBuffer();
 	RTsize buffer_width, buffer_height;
@@ -492,58 +544,6 @@ void TankScene::trace(const RayGenCameraData& camera_data){
 	m_context->launch(0, buffer_width, buffer_height);
 }
 
-//void TankScene::trace( const RayGenCameraData& camera_data )
-//{
-//	float3 right, focus;
-//
-//	float3 vp, vd, vu;
-//	vp = camera_data.eye;
-//	vd = camera_data.W;
-//	vu = camera_data.up;
-//	m_dist = length(camera_data.W);
-//
-//	//float focallength = 6;
-//	float focallength = m_dist/4;
-//	float eyesep = focallength / 30.0;
-//
-//	/* Determine the focal point */
-//	Normalise(&vd);
-//	focus.x = vp.x + focallength * vd.x;
-//	focus.y = vp.y + focallength * vd.y;
-//	focus.z = vp.z + focallength * vd.z;
-//
-//	printf("focal: %f %f %f\n", focus.x, focus.y, focus.z);
-//	printf("W: %f %f %f\n", camera_data.W.x, camera_data.W.y, camera_data.W.z);
-//
-//	/* Derive the the "right" vector */
-//	CROSSPROD(vd, vu, right);
-//	Normalise(&right);
-//	right.x *= eyesep / 2.0;
-//	right.y *= eyesep / 2.0;
-//	right.z *= eyesep / 2.0;
-//
-//	  m_context["eye"]->setFloat( camera_data.eye );
-//	  m_context["U"]->setFloat( camera_data.U );
-//	  m_context["V"]->setFloat( camera_data.V );
-//	  m_context["W"]->setFloat( camera_data.W );
-//
-//	  m_context["vp"]->setFloat(vp);
-//	  m_context["vd"]->setFloat(vd);
-//	  m_context["vu"]->setFloat(vu);
-//	  m_context["focus"]->setFloat(focus);
-//	  m_context["right"]->setFloat(right);
-//	  m_context["anaglyphic"]->setInt(m_anaglyphic);
-//
-//  Buffer buffer = m_context["output_buffer"]->getBuffer( );
-//  RTsize buffer_width, buffer_height;
-//  buffer->getSize( buffer_width, buffer_height );
-//
-//  //Update the vertex positions before rendering
-//  updateGeometry( );
-//
-//  m_context->launch( 0, buffer_width, buffer_height );
-//}
-
 Buffer TankScene::getOutputBuffer( )
 {
   return m_context["output_buffer"]->getBuffer( );
@@ -551,44 +551,33 @@ Buffer TankScene::getOutputBuffer( )
 
 bool TankScene::keyPressed( unsigned char key, int x, int y )
 {
-  switch ( key ) {
-  case 'e':
-    m_scene_epsilon /= 10.0f;
-    std::cerr << "scene_epsilon: " << m_scene_epsilon << std::endl;
-    m_context[ "scene_epsilon" ]->setFloat( m_scene_epsilon );
-    return true;
-  case 'E':
-    m_scene_epsilon *= 10.0f;
-    std::cerr << "scene_epsilon: " << m_scene_epsilon << std::endl;
-    m_context[ "scene_epsilon" ]->setFloat( m_scene_epsilon );
-    return true;
-  case 'a':
-    m_animate = !m_animate;
-    return true;
-  case ' ':
-	  m_anaglyphic = !m_anaglyphic;
-	  return true;
-  case 'l':
-	  printf("%f\n", m_dist);
-	  return true;
-  case 'p':
-	  for (size_t i = 0; i < Fish.size(); i++) {
-		  float3 pos = Fish[i]->target_pos();
-		  printf("%d - %f %f %f\n", i, pos.x, pos.y, pos.z);
-	  }
-	  return true;
-  case '+':
-	  S += 0.01;
-	  printf("S = %f\n", S);
-	  return true;
-  case '-':
-	  S -= 0.01;
-	  printf("S = %f\n", S);
-	  return true;
-  }
-  
-
-  return false;
+	switch (key) {
+	case 'e':
+		m_scene_epsilon /= 10.0f;
+		std::cerr << "scene_epsilon: " << m_scene_epsilon << std::endl;
+		m_context["scene_epsilon"]->setFloat(m_scene_epsilon);
+		return true;
+	case 'E':
+		m_scene_epsilon *= 10.0f;
+		std::cerr << "scene_epsilon: " << m_scene_epsilon << std::endl;
+		m_context["scene_epsilon"]->setFloat(m_scene_epsilon);
+		return true;
+	case 'a':
+		m_animate = !m_animate;
+		return true;
+	case ' ':
+		m_anaglyphic = !m_anaglyphic;
+		return true;
+	case '+':
+		S += 0.002;
+		printf("Eye sep.: %f\n", S);
+		return true;
+	case '-':
+		S -= 0.002;
+		printf("Eye sep.: %f\n", S);
+		return true;
+	}
+	return false;
 }
 
 //------------------------------------------------------------------------------

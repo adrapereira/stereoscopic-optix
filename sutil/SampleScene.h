@@ -128,6 +128,7 @@ public:
   SUTILAPI optix::Context& getContext() { return m_context; }
 
   float3 * stereoCalc(const RayGenCameraData& camera_data, int mode);
+  SUTILAPI void  setStereo(int st) { m_stereo = st; }
 
 
 	#define LEFT 0
@@ -143,6 +144,7 @@ protected:
   bool   m_use_vbo_buffer;
   int    m_num_devices;
   bool   m_cpu_rendering_enabled;
+  int    m_stereo = 0;
 
 private:
   // Checks to see if CPU mode has been enabled and sets the appropriate flags.

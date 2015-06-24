@@ -43,6 +43,7 @@ rtDeclareVariable(float3,		 lookA, , );
 rtDeclareVariable(float3,		 posB, , );
 rtDeclareVariable(float3,		 lookB, , );
 rtDeclareVariable(int,			 anaglyphic, , );
+rtDeclareVariable(int,			 stereo, , );
 
 rtDeclareVariable(float3,        bad_color, , );
 rtDeclareVariable(float,         scene_epsilon, , ) = 0.1f;
@@ -131,61 +132,14 @@ RT_PROGRAM void dof_camera(){
 	else{
 		new_color = trace_one(eye, W);
 	}
-
-	/*// accumulation
-	if (frame_number > 1)
+	if (frame_number > 1 && !stereo)
 	{
 		float a = 1.0f / (float)frame_number;
 		float b = ((float)frame_number - 1.0f) * a;
 		const float3 old_color = read_output();
 		write_output(a * new_color + b * old_color);
-	}
-	else
-	{*/
-		write_output(new_color);
-	//}
+	}else write_output(new_color);
 }
-
-//RT_PROGRAM void dof_camera()
-//{
-//	size_t2 screen = output_format == RT_FORMAT_FLOAT4 ? output_buffer_f4.size() : output_buffer_f3.size();
-//
-//	// pixel sampling
-//	float2 pixel_sample = make_float2(launch_index) + make_float2(jitter.x, jitter.y);
-//	float2 d = pixel_sample / make_float2(screen) * 2.f - 1.f;
-//
-//	// Calculate ray-viewplane intersection point
-//	float3 ray_origin = eye;
-//	float3 ray_direction = d.x*U + d.y*V + W;
-//	float3 ray_target = ray_origin + focal_scale * ray_direction;
-//
-//	// lens sampling
-//	float2 sample = optix::square_to_disk(make_float2(jitter.z, jitter.w));
-//	ray_origin = ray_origin + aperture_radius * (sample.x * normalize(U) + sample.y * normalize(V));
-//	ray_direction = normalize(ray_target - ray_origin);
-//
-//	// shoot ray
-//	optix::Ray ray = optix::make_Ray(ray_origin, ray_direction, radiance_ray_type, scene_epsilon, RT_DEFAULT_MAX);
-//
-//	PerRayData_radiance prd;
-//	prd.importance = 1.f;
-//	prd.depth = 0;
-//
-//	rtTrace(top_object, ray, prd);
-//
-//	// accumulation
-//	if (frame_number > 1)
-//	{
-//		float a = 1.0f / (float)frame_number;
-//		float b = ((float)frame_number - 1.0f) * a;
-//		const float3 old_color = read_output();
-//		write_output(a * prd.result + b * old_color);
-//	}
-//	else
-//	{
-//		write_output(prd.result);
-//	}
-//}
 
 RT_PROGRAM void exception()
 {

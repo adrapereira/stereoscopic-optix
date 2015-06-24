@@ -310,7 +310,6 @@ private:
 
   int m_anaglyphic = 0;
   int m_eye = 0;
-  float S = 0;
 
   static Parameters     parameters[];
 
@@ -362,7 +361,7 @@ void CookScene::initScene( InitialCameraData& camera_data )
                                    /*make_float3( parameters[setup].lookat[0],     // target
                                                 parameters[setup].lookat[1],
                                                 parameters[setup].lookat[2] */
-												make_float3( 3.0f, -30.0f, 1.0f ),
+												make_float3( 5.0f, 0.0f, 0.0f ),
                                    make_float3( 0.0f, 1.0f,  0.0f ),             // up
                                    40.0f );                                      // vfov
 
@@ -542,7 +541,7 @@ void CookScene::trace( const RayGenCameraData& camera_data )
 
 void CookScene::trace(const RayGenCameraData& camera_data, bool& disp, int eye){
 	m_eye = eye;
-	//m_anaglyphic = 0; //do not render as anaglyphic when in shutter mode
+	m_anaglyphic = 0; //do not render as anaglyphic when in shutter mode
 	trace(camera_data, disp);
 }
 
@@ -551,8 +550,7 @@ float3 * SampleScene::stereoCalc(const RayGenCameraData& camera_data, int mode){
 	float3 posA, lookA, posB, lookB;
 	float3 pos = camera_data.eye;
 	float3 look = camera_data.W;
-	//float S = length(camera_data.W) / 200;
-	float S = 0.05;
+	float S = length(camera_data.W) / 300;
 
 	float alfa = atan2(look.y - pos.y, look.x - pos.x);
 	float3 *res;
@@ -567,7 +565,7 @@ float3 * SampleScene::stereoCalc(const RayGenCameraData& camera_data, int mode){
 		lookA.x = look.x - sin(alfa) * S;
 		lookA.z = look.z;
 		lookA.y = look.y + cos(alfa) * S;
-		res[0] = posA; res[1] = lookA;
+		res[0] = posA; res[1] = look;
 	}
 	if (mode == RIGHT || mode == BOTH){
 		posB.x = pos.x + sin(alfa) * S;
@@ -577,10 +575,10 @@ float3 * SampleScene::stereoCalc(const RayGenCameraData& camera_data, int mode){
 		lookB.z = look.z;
 		lookB.y = look.y - cos(alfa) * S;
 		if (mode == BOTH){
-			res[2] = posB; res[3] = lookB;
+			res[2] = posB; res[3] = look;
 		}
 		else{
-			res[0] = posB; res[1] = lookB;
+			res[0] = posB; res[1] = look;
 		}
 	}
 	return res;
@@ -593,6 +591,7 @@ void CookScene::trace( const RayGenCameraData& camera_data, bool& disp ){
 	m_context["V"]->setFloat(camera_data.V);
 	m_context["W"]->setFloat(camera_data.W);
 	m_context["anaglyphic"]->setInt(m_anaglyphic);
+	m_context["stereo"]->setInt(m_stereo);
 
 	if (m_anaglyphic){
 		float3 *vecs = stereoCalc(camera_data, BOTH);
@@ -629,7 +628,7 @@ void CookScene::trace( const RayGenCameraData& camera_data, bool& disp ){
 	static unsigned sequence = 1;
 	static unsigned frame = 0;
 
-	if( m_camera_changed ) {
+	if( m_camera_changed && !m_stereo) {
 		srand(1984);
 		frame = 0;
 		sequence = 1;
@@ -648,10 +647,11 @@ void CookScene::trace( const RayGenCameraData& camera_data, bool& disp ){
 	m_context["frame_number"]->setUint( ++frame );
 	disp = (frame >= 33) || !((frame-1) & 0x3); // Display frames 1, 5, 9, ... and 33+
 
-	/*float4 jitter = compute_jitter( sequence );
-	//float4 jitter = random4();
-	m_context["jitter"]->setFloat( jitter );
-	*/
+	if (!m_stereo){
+		float4 jitter = compute_jitter( sequence );
+		m_context["jitter"]->setFloat( jitter );
+	}
+
 	m_context->launch( 0,
 					static_cast<unsigned int>(buffer_width),
 					static_cast<unsigned int>(buffer_height)
@@ -664,16 +664,7 @@ bool CookScene::keyPressed(unsigned char key, int x, int y)
 	case ' ':
 		m_anaglyphic = !m_anaglyphic;
 		return true;
-	case '+':
-		S += 0.01;
-		printf("S = %f\n", S);
-		return true;
-	case '-':
-		S -= 0.01;
-		printf("S = %f\n", S);
-		return true;
 	}
-
 
 	return false;
 }
@@ -778,6 +769,7 @@ void CookScene::createGeometry()
   
   std::cerr << "finished." << std::endl;
   puts("Press space to render in anaglyphic 3D.");
+  puts("Press 3 to render in Nvidia's 3D Vision.");
 }
 
 //-----------------------------------------------------------------------------
